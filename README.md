@@ -6,3 +6,4 @@
 * https://cs231n.github.io/convolutional-networks/
 * https://www.cs.toronto.edu/~kriz/cifar.html
 * https://www.tensorflow.org/tutorials/images/cnn
+* https://numpy-ml.readthedocs.io/en/latest/numpy_ml.neural_nets.html
