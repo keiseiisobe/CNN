@@ -2,6 +2,7 @@ import numpy as np
 import numpy.typing as npt
 import _pickle as pickle
 from typing import Annotated
+from networks import Lenet
 
 def unpickle(file):
     with open(file, 'rb') as fo:
@@ -57,20 +58,21 @@ class Model:
         out[out < 0] = 0 # RELU_1
         out = max_pooling(out)
         pass
-    
+
     def backward(self, loss: np.float64):
         pass
-        
+
 
 if __name__ == "__main__":
     filename_head = "cifar-10/data_batch_"
+    net = Lenet()
     # cifar-10/ data_batch_1 ~ data_batch_5
     for i in range(1, 6):
         dict = unpickle(filename_head + str(i))
         # 10000 images per a data_batch_*
         for j in range(10000):
             data = dict[b"data"][i]
+            # data.shape = [32 * 32 * 3, ]
             # normalize data value to be between 0 and 1
             data /= 255
-            print(data.shape)
-            # data.shape = [32 * 32 * 3, ]
+            net.train(data)
