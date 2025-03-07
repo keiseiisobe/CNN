@@ -12,3 +12,5 @@ auto-save-list
 tramp
 .\#*
 
+# this repo specific
+mnist/data/
