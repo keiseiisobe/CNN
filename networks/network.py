@@ -12,3 +12,8 @@ class Network(ABC):
     @abstractmethod
     def backward(self):
         pass
+
+    @abstractmethod
+    def train(self):
+        pass
+    

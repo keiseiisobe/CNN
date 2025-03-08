@@ -23,6 +23,7 @@ def _download():
     for k, v in mnist_files.items():
         if Path(base_dir + v).exists():
             continue
+        print("downloading", v, "...")
         r = requests.get(base_url + v, stream=True)
         with open(base_dir + v, "wb") as f:
             for chunk in r.iter_content(chunk_size=128):
@@ -44,4 +45,5 @@ def _decompress():
 def load_data():
     _download()
     mnist = _decompress()
+    print("mnist datasets completely loaded")
     return mnist["x_train"], mnist["y_train"], mnist["x_test"], mnist["y_test"]
