@@ -1,9 +1,11 @@
 # implement CNN from scratch (only use numpy)
-### classify CIFAR-10 dataset
-![alt text](https://www.tensorflow.org/static/tutorials/images/cnn_files/output_K3PAELE2eSU9_0.png)
+### Classify mnist dataset using LeNet
+![alt text](https://upload.wikimedia.org/wikipedia/commons/b/b1/MNIST_dataset_example.png)
 
 ## Reference:
 * https://cs231n.github.io/convolutional-networks/
-* https://www.cs.toronto.edu/~kriz/cifar.html
-* https://www.tensorflow.org/tutorials/images/cnn
+* http://yann.lecun.com/exdb/lenet/
+* http://vision.stanford.edu/cs598_spring07/papers/Lecun98.pdf
+* https://en.wikipedia.org/wiki/LeNet
 * https://numpy-ml.readthedocs.io/en/latest/numpy_ml.neural_nets.html
+* https://www.tensorflow.org/tutorials/images/cnn
