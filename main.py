@@ -9,12 +9,13 @@ if __name__ == "__main__":
     x_test /= 255
 
     # hyperparameters
-    epoch = 10
+    epoch = 1
+    # batch_size = 1 -> default
 
     lenet = Lenet()
-    y = lenet.forward(x_train[0].reshape(28, 28))
-    print("y.shape:", y.shape)
-    print("y:", y)
+    for i in range(epoch):
+        for j in range(len(x_train)):
+            lenet.train(x_train[j].reshape(28, 28), y_train[j])
 
 # plt.subplots()
 # plt.imshow(x_train[0].reshape(28, 28))

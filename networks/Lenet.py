@@ -1,5 +1,8 @@
-from network import Network
+from networks.network import Network
 from utils.utils import im2col
+from layers.layers import Conv, Pool, FC
+from activations.activations import Relu
+from losses.losses import CrossEntropy
 
 class Lenet(Network):
     """
@@ -70,9 +73,24 @@ class Lenet(Network):
         I used RELU instead of sigmoid as activation function.
     """
     def __init__(self):
-        pass
-    
-    def forward(self, x):
+        conv1 = Conv()
+        relu1 = Relu()
+        pool1 = Pool()
+        conv2 = Conv()
+        relu2 = Relu()
+        pool2 = Pool()
+        conv3 = Conv()
+        relu3 = Relu()
+        fc1 = FC()
+        relu4 = Relu()
+        fc2 = FC()
+        loss = CrossEntropy()
+        self.layers = [
+            conv1, relu1, pool1,
+            conv2, relu2, pool2,
+            conv3, relu3, fc1, relu4, fc2, loss]
+
+    def forward(self, x, y):
         """
         arguments:
         x: 2DArray[float]
@@ -82,8 +100,15 @@ class Lenet(Network):
         y: 2DArray[float]
            - shape: (10, 1)
         """
-        x_col = im2col(x, self.k1_shape)
+        for layer in self.layers:
+            x = layer.forward(x)
+        return x
 
-    def backward(self):
-        pass
+    def backward(self, delta):
+        for layer in reversed(self.layers):
+            delta = layer.backward(delta)
 
+    def train(self, x_train, y_train):
+        loss = self.forward(x_train, y_train)
+        self.backward(loss)
+        

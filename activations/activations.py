@@ -1,2 +1,0 @@
-class Relu:
-    pass
