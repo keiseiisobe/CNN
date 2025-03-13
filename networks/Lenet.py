@@ -53,17 +53,21 @@ class Lenet(Network):
        - stride: 1
        - output: (1, 1, 120)
 
-    FC:
+    FC_1:
        - input: (120, 1)
        - weights: (84, 120)
        - bias: 84
        - output: (84, 1)
 
-    OUTPUT:
+    FC_2:
        - input: (84, 1)
        - weights: (10, 84)
        - bias: 10
        - output: (10, 1)
+
+    LOSS:
+       - input: (10, 1)
+       - output: float
 
     annotation:
     some part of this implementation is not same as original LeNet-5 implementation,
@@ -116,13 +120,14 @@ class Lenet(Network):
             x = layer.forward(x)
         return x
 
-    def backward(self, delta):
+    def backward(self):
+        delta = []
         for layer in reversed(self.layers):
             delta = layer.backward(delta)
 
     def train(self, x_train, y_train):
-        loss = self.forward(x_train, y_train)
-        self.backward(loss)
+        self.forward(x_train, y_train)
+        self.backward()
 
     def evaluate(self, x_test, y_test):
         loss = self.forward(x_test, y_test)
