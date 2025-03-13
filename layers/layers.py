@@ -30,7 +30,8 @@ class Conv(Layer):
         self.num_of_filters = num_of_filters
         self.padding = padding
         self.stride = stride
-        self.weights = rng.standard_normal((field_size, field_size, field_depth, num_of_filters))
+        self.weights = rng.standard_normal((field_size, field_size, field_depth, num_of_filters)) * \
+            np.sqrt(2.0 / (field_size**2 * field_depth))
 
     def _get_out_shape(self, x):
         """
@@ -108,16 +109,18 @@ class MaxPool(Layer):
 class FC(Layer):
     def __init__(self, weights_shape):
         self.weights_shape = weights_shape
-        self.weights = rng.standard_normal(self.weights_shape)
+        self.weights = rng.standard_normal(self.weights_shape) * np.sqrt(2.0 / weights_shape[1])
 
     def forward(self, x):
         print("forwarding fully connected layer")
-        # flatten
         if len(x.shape) > 1:
-            x.ravel()
+            x = x.flatten()
         x = np.expand_dims(x, 1)
+        y = np.dot(self.weights, x)
         print("x shape:", x.shape)
         print("w shape:", self.weights.shape)
+        print("y shape:", y.shape)
+        return y
 
     def backward(self, delta):
         pass
@@ -125,10 +128,27 @@ class FC(Layer):
 # loss layers
 class CrossEntropy(Layer):
     def __init__(self):
+        self._label = None
         pass
 
+    @property
+    def label(self):
+        return self._label
+
+    @label.setter
+    def label(self, value):
+        self._label = value
+
+    def softmax(self, x):
+        return np.exp(x) / np.sum(np.exp(x))
+        
     def forward(self, x):
-        print("forwarding cross entropy layer")
+        print("forwarding loss layer")
+        print("x shape:", x.shape)
+        print("x:", x)
+        x = self.softmax(x)
+        print("softmax shape:", x.shape)
+        print("softmax:", x)
 
     def backward(self, delta):
         pass

@@ -81,9 +81,9 @@ class Lenet(Network):
         self.conv3 = Conv(5, 16, 120)
         self.relu3 = Relu()
         self.fc1 = FC((84, 120))
-        # self.relu4 = Relu()
-        # self.fc2 = FC()
-        # self.loss = CrossEntropy()
+        self.relu4 = Relu()
+        self.fc2 = FC((10, 84))
+        self.loss = CrossEntropy()
         self.layers = [
             self.conv1,
             self.relu1,
@@ -94,9 +94,9 @@ class Lenet(Network):
             self.conv3,
             self.relu3,
             self.fc1,
-            # self.relu4,
-            # self.fc2,
-            # self.loss
+            self.relu4,
+            self.fc2,
+            self.loss
         ]
 
     def forward(self, x, y):
@@ -109,6 +109,9 @@ class Lenet(Network):
         y: 2DArray[float]
            - shape: (10, 1)
         """
+        print("x:", x)
+        print("y:", y)
+        self.loss.label = y
         for layer in self.layers:
             x = layer.forward(x)
         return x
