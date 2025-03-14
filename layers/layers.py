@@ -95,10 +95,20 @@ class Conv(Layer):
         """
         print("backwarding conv layer")
         delta = delta.reshape(self.out_shape)
+        delta_w = np.zeros((self.out_shape[0], self.out_shape[1], self.x.shape[2], self.out_shape[2]))
+        for i in range(self.out_shape[2]):
+            for j in range(self.x.shape[2]):
+                delta_w[:, :, j, i] += delta[:, :, i]
         print("x shape:", self.x.shape)
-        print("delta shape:", delta.shape)
-        out_shape = self._get_out_shape(self.x, delta.shape)
+        print("delta_w shape:", delta_w.shape)
+        out_shape = self._get_out_shape(self.x, delta_w.shape)
         print("out shape:", out_shape)
+        x_col = self._im2col(self.x, out_shape, delta_w.shape)
+        print("x_col shape:", x_col.shape)
+        w_raw = delta_w.reshape(delta_w.shape[3], delta_w.shape[0]**2 * delta_w.shape[2])
+        print("w_raw:", w_raw.shape)
+        dw = np.dot(w_raw, x_col).reshape(out_shape)
+        print("dw shape:", dw.shape)
 
 
 class MaxPool(Layer):
