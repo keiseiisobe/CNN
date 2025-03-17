@@ -18,12 +18,12 @@ if __name__ == "__main__":
 
     # hyperparameters
     epoch = 1
-    # batch_size = 1 -> default
+    batch_size = 100  # default (stochastic gradient decent)
 
     lenet = Lenet()
     for i in range(epoch):
-        for j in range(1): # len(x_train)):
-            lenet.train(x_train[j].reshape(28, 28), one_hot_y_train[j].reshape(-1, 1))
+        for j in range(batch_size):
+            lenet.train(x_train[j].reshape(28, 28, 1), one_hot_y_train[j].reshape(-1, 1))
 
 # plt.subplots()
 # plt.imshow(x_train[0].reshape(28, 28))

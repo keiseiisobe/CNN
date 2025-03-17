@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import numpy as np
+from activations.activations import ReLU
 
 # for debug
 import sys
@@ -27,190 +28,197 @@ class Layer(ABC):
 
 # normal layers
 class Conv(Layer):
-    def __init__(self, field_size, field_depth, num_of_filters, padding=0, stride=1):
-        self.field_size = field_size
-        self.field_depth = field_depth
-        self.num_of_filters = num_of_filters
+    def __init__(self, out_ch, kernel_shape: tuple, padding=0, stride=1, activation="ReLU"):
+        self.out_ch = out_ch
+        self.kernel_shape = kernel_shape
         self.padding = padding
         self.stride = stride
-        self.weights = rng.standard_normal((field_size, field_size, field_depth, num_of_filters)) * \
-            np.sqrt(2.0 / (field_size**2 * field_depth))
+        self.act_fn = ReLU() if activation == "ReLU" else None
+        self.in_ch = None
+        self.weights = None
+        self.bias = None
         self.x = None
-        self.out_shape = None
+        self.is_initialized = False
 
-    def _get_out_shape(self, x, *args):
-        """
-        output shape derivation
-        out_height = (in_height - w_height + 2 * padding) / stride + 1
-        out_width = (in_width - w_width + 2 * padding) / stride + 1
-        out_depth = in_depth
-        """
-        field_size = args[0][0] if len(args) == 1 else self.field_size
-        in_h, in_w, in_d = x.shape
-        # padding has already been handled in the top of forward function.
-        out_h = out_w = int((in_h - field_size) / self.stride + 1)
-        out_d = self.num_of_filters
-        return out_h, out_w, out_d
-                
-    def _im2col(self, x, out_shape, *args):
+    def _init_params(self, in_ch):
+        self.in_ch = in_ch
+        self.weights = rng.standard_normal(
+            (
+                self.kernel_shape,
+                self.kernel_shape,
+                self.in_ch,
+                self.out_ch
+            )
+        ) * np.sqrt(2.0 / (self.kernel_shape**2 * self.in_ch))
+        self.is_initialized = True
+
+    def _im2col(self, x, weights_shape):
         """
         this function stretchs out input images.
        (based on https://github.com/ddbourgin/numpy-ml/blob/b0359af5285fbf9699d64fd5ec059493228af03e/numpy_ml/neural_nets/utils/utils.py#L486)
         """
-        field_size = args[0][0] if len(args) == 1 else self.field_size
-        field_depth = args[0][2] if len(args) == 1 else self.field_depth
-        x_col = np.zeros((field_size**2 * field_depth, out_shape[0]**2))
-        print("x_col: ", x_col.shape)
-        print("out shape: ", out_shape)
-        if len(args) == 1:
-            print("w shape: ", args[0])
-        for h in range(0, out_shape[0], self.stride):
-            for w in range(0, out_shape[1], self.stride):
-                col = x[h:h + field_size, w:w + field_size, :].ravel()
-                x_col[:, h + w] += col[:]
-        print("x shape: ", x.shape)
-        print("out shape: ", out_shape)
-        return x_col
+        k = self.kernel_shape
+        s = self.stride
+        in_h, in_w, in_ch = x.shape
+        out_h = in_h - k + 1
+        out_w = in_w - k + 1
+        x_col = np.zeros((k**2 * self.in_ch, out_h * out_w))
+        for h in range(0, out_h, self.stride):
+            for w in range(0, out_w, self.stride):
+                patch = x[h:h+k, w:w+k, :].ravel()
+                x_col[:, h + w] += patch[:]
+        return x_col, out_h, out_w
 
+    def _col2im(self, x_col):
+        k = self.kernel_shape
+        s = self.stride
+        x_col_h, x_col_w = x_col.shape
+        x_h, x_w, in_ch = self.x.shape
+        w_h, w_w, in_ch, out_ch = self.weights.shape
+        out_h = x_h - w_h + 1
+        out_w = x_w - w_w + 1
+        dx = np.zeros(self.x.shape)
+        for h in range(out_h):
+            for w in range(out_w):
+                x_col_patch = x_col[:, h + w].reshape((k, k, in_ch))
+                dx[h:h*s+k, w:w*s+k, :] += x_col_patch
+        return dx
+
+    def _inner_forward(self, x):
+        p = self.padding
+        if p > 0:
+            # zero padding for 0 and 1 axis (x and y), not for 2 axis (self.in_ch)
+            self.x = np.pad(x, ((p, p), (p, p), (0, 0)), constant_values=0)
+        x_col, out_h, out_w = self._im2col(self.x, self.weights.shape)
+        w_raw = self.weights.reshape(self.out_ch, -1)
+        return (w_raw @ x_col).reshape(out_h, out_w, self.out_ch)
+        
     def forward(self, x):
-        print("forwarding conv layer")
-        if len(x.shape) == 2:
-            x = np.expand_dims(x, 2)
-        if self.padding > 0:
-            x = np.pad(x, ((self.padding, self.padding), (self.padding, self.padding), (0, 0)), constant_values=0)
+        #print("conv")
+        #print("x:", x.shape)
+        # store input to obtain grad later
         self.x = x
-        self.out_shape = self._get_out_shape(x)
-        x_col = self._im2col(x, self.out_shape)
-        w_raw = self.weights.reshape(self.num_of_filters, self.field_size**2 * self.field_depth)
-        y = np.dot(w_raw, x_col).reshape(self.out_shape[0], self.out_shape[1], self.out_shape[2])
-        print("x_col shape:", x_col.shape)
-        print("w_raw shape:", w_raw.shape)
-        print("y shape:", y.shape)
-        return y
+        if not self.is_initialized:
+            self._init_params(self.x.shape[2])
+        z = self._inner_forward(self.x)
+        a = self.act_fn.fn(z)
+        #print("y:", a.shape)
+        return a
 
-    def backward(self, delta):
+    def backward(self, dLdy):
         """
         dL/dw = conv(x, delta)
         dL/dx = conv(delta, 180 degree rotated w)
         """
-        print("backwarding conv layer")
-        delta = delta.reshape(self.out_shape)
-        delta_w = np.zeros((self.out_shape[0], self.out_shape[1], self.x.shape[2], self.out_shape[2]))
-        for i in range(self.out_shape[2]):
-            for j in range(self.x.shape[2]):
-                delta_w[:, :, j, i] += delta[:, :, i]
-        print("x shape:", self.x.shape)
-        print("delta_w shape:", delta_w.shape)
-        out_shape = self._get_out_shape(self.x, delta_w.shape)
-        print("out shape:", out_shape)
-        x_col = self._im2col(self.x, out_shape, delta_w.shape)
-        print("x_col shape:", x_col.shape)
-        w_raw = delta_w.reshape(delta_w.shape[3], delta_w.shape[0]**2 * delta_w.shape[2])
-        print("w_raw:", w_raw.shape)
-        dw = np.dot(w_raw, x_col).reshape(out_shape)
-        print("dw shape:", dw.shape)
+        #print("conv")
+        #print("dLdy:", dLdy.shape)
+        dLdy = dLdy.reshape((-1, self.out_ch))
+        dz = self.act_fn.grad(dLdy)
+        #print("dz:", dz.shape)
+        x_col, out_h, out_w = self._im2col(self.x, self.weights.shape)
+        #print("x:", self.x.shape)
+        #print("w:", self.weights.shape)
+        #print("out_h:", out_h)
+        #print("x_col:", x_col.shape)
+        dw = (x_col @ dz).reshape(self.weights.shape)
+        self.weights -= dw * learning_rate
+        self.weights = np.rot90(self.weights, k=2)
+        #print("w:", self.weights.shape)
+        dx_col = dw.reshape(-1, self.out_ch) @ dz.T
+        #print("dx_col:", dx_col.shape)
+        dx = self._col2im(dx_col)
+        #print("dx:", dx.shape)
+        return dx
+        
 
 
 class MaxPool(Layer):
-    def __init__(self, field_size, field_depth, padding=0, stride=2):
-        self.field_size = field_size
-        self.field_depth = field_depth
+    def __init__(self, kernel_shape, padding=0, stride=2):
+        self.kernel_shape = kernel_shape
         self.padding = padding
         self.stride = stride
+        self.x = None
 
-    def _get_out_shape(self, x):
-        in_h, in_w, in_d = x.shape
-        out_h = out_w = int((in_h - self.field_size) / self.stride + 1)
-        out_d = in_d
-        return out_h, out_w, out_d
-        
     def forward(self, x):
-        print("forwarding maxpooling layer")
-        out_shape = self._get_out_shape(x)
-        y = np.zeros(out_shape)
-        for h in range(0, out_shape[0], self.stride):
-            for w in range(0, out_shape[1], self.stride):
-                y[h, w, :] = np.max(x[h:h + self.field_size, w:w + self.field_size, :], (0, 1))
-        print("x shape:", x.shape)
-        print("out shape:", out_shape)
-        print("y shape:", y.shape)
+        #print("maxpool")
+        #print("x:", x.shape)
+        in_h, in_w, in_ch = x.shape
+        k = self.kernel_shape
+        s = self.stride
+        out_h = int((in_h - k) / s + 1)
+        out_w = int((in_w - k) / s + 1)
+        out_ch = in_ch
+        y = np.zeros((out_h, out_w, out_ch))
+        for h in range(0, out_h, s):
+            for w in range(0, out_w, s):
+                y[h, w, :] = np.max(x[h:h+k, w:w+k, :], (0, 1))
+        # store input to obtain grad later
+        self.x = x
+        #print("y:", y.shape)
         return y
 
-    def backward(self, delta):
-        print("backwarding maxpooling layer")
+    def backward(self, dLdy):
+        #print("maxpool")
+        #print("dLdy:", dLdy.shape)
+        in_h, in_w, in_ch = self.x.shape
+        k = self.kernel_shape
+        s = self.stride
+        out_h = int((in_h - k) / s + 1)
+        out_w = int((in_w - k) / s + 1)
+        out_ch = in_ch
+        dLdy = dLdy.reshape((out_h, out_w, out_ch))
+        dx = np.zeros(self.x.shape)
+        for h in range(0, out_h):
+            for w in range(0, out_w):
+                for c in range(out_ch):
+                    x_patch = self.x[h:h*s+k, w:w*s+k, c]
+                    x, y = np.argwhere(x_patch == np.max(x_patch))[0]
+                    mask = np.zeros(x_patch.shape)
+                    mask[x, y] = 1
+                    dx[h:h*s+k, w:w*s+k, c] += dLdy[h, w, c] * mask
+        #print("dx:", dx.shape)
+        return dx
 
 class FC(Layer):
-    def __init__(self, weights_shape):
+    def __init__(self, n_out, activation="ReLU"):
+        self.n_out = n_out
+        self.act_fn = ReLU() if activation == "ReLU" else None
+        self.n_in = None
+        self.weights = None
         self.x = None
-        self.weights_shape = weights_shape
-        self.weights = rng.standard_normal(self.weights_shape) * np.sqrt(2.0 / weights_shape[1])
+        self.is_initialized = False
+
+    def _init_params(self, n_in):
+        self.n_in = n_in
+        self.weights = rng.standard_normal(
+            (
+                self.n_out,
+                self.n_in
+             )
+        ) * np.sqrt(2.0 / self.n_in)
+        self.is_initialized = True
 
     def forward(self, x):
-        print("forwarding fully connected layer")
+        #print("fc")
+        #print("x:", x.shape)
+        # insert Flatten layer if needed
         if len(x.shape) > 1:
             x = x.flatten()
         x = np.expand_dims(x, 1)
-        y = np.dot(self.weights, x)
-        print("x shape:", x.shape)
-        print("w shape:", self.weights.shape)
-        print("y shape:", y.shape)
+        if not self.is_initialized:
+            self._init_params(x.shape[0])
+        z = np.dot(self.weights, x)
+        a = self.act_fn.fn(z)
         self.x = x
-        return y
+        #print("y:", a.shape)
+        return a
 
-    def backward(self, delta):
-        print("backwarding fully connected layer")
-        print("delta shape:", delta.shape)
-        print("x shape:", self.x.shape)
-        dw = np.dot(delta, self.x.T)
-        print("dw shape:", dw.shape)
+    def backward(self, dLdy):
+        #print("fc")
+        #print("dLdy:", dLdy.shape)
+        dz = self.act_fn.grad(dLdy)
+        dw = np.dot(dz, self.x.T)
         self.weights -= dw * learning_rate
-        dx = np.dot(self.weights.T, delta)
-        print("dx shape:", dx.shape)
+        dx = np.dot(self.weights.T, dz)
+        #print("dx shape:", dx.shape)
         return dx
-
-# loss layers
-class CrossEntropy(Layer):
-    def __init__(self):
-        self._label = None
-        self.probs = None
-
-    @property
-    def label(self):
-        return self._label
-
-    @label.setter
-    def label(self, value):
-        self._label = value.copy()
-
-    def softmax(self, x):
-        return np.exp(x) / np.sum(np.exp(x))
-
-    def forward(self, x):
-        print("forwarding loss layer")
-        print("x shape:", x.shape)
-        print("x:", x)
-        self.probs = self.softmax(x)
-        print("probs shape:", self.probs.shape)
-        print("probs:", self.probs)
-        y = -np.sum(np.log(self.probs) * self._label)
-        print("loss:", y)
-        return y
-
-    def backward(self, delta):
-        print("backwarding loss layer")
-        return self.probs - self._label
-
-# activation layers
-class Relu(Layer):
-    def __init__(self):
-        pass
-
-    def forward(self, x):
-        print("forwarding relu layer")
-        x[x < 0] = 0
-        return x
-
-    def backward(self, delta):
-        print("backwarding relu layer")
-        delta[delta < 0] = 0
-        return delta

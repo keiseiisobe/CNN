@@ -11,13 +11,9 @@ class Network(ABC):
         pass
 
     @abstractmethod
-    def backward(self):
+    def backward(self, dLdy):
         pass
 
     @abstractmethod
     def train(self, x_train, y_train):
-        pass
-
-    @abstractmethod
-    def evaluate(self, x_test, y_test):
         pass

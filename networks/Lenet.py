@@ -1,6 +1,6 @@
 from networks.network import Network
-from utils.utils import im2col
-from layers.layers import Conv, MaxPool, FC, Relu, CrossEntropy
+from layers.layers import Conv, MaxPool, FC
+from losses.losses import CrossEntropy
 import numpy as np
 
 class Lenet(Network):
@@ -55,7 +55,7 @@ class Lenet(Network):
 
     FC_1:
        - input: (120, 1)
-       - weights: (84, 120)
+3       - weights: (84, 120)
        - bias: 84
        - output: (84, 1)
 
@@ -76,62 +76,51 @@ class Lenet(Network):
         I used RELU instead of sigmoid as activation function.
     """
     def __init__(self):
-        self.conv1 = Conv(5, 1, 6, 2)
-        self.relu1 = Relu()
-        self.maxpool1 = MaxPool(2, 6)
-        self.conv2 = Conv(5, 6, 16, 0)
-        self.relu2 = Relu()
-        self.maxpool2 = MaxPool(2, 16)
-        self.conv3 = Conv(5, 16, 120)
-        self.relu3 = Relu()
-        self.fc1 = FC((84, 120))
-        self.relu4 = Relu()
-        self.fc2 = FC((10, 84))
-        self.loss = CrossEntropy()
+        self.conv1 = Conv(6, 5, padding=2)
+        self.maxpool1 = MaxPool(2)
+        self.conv2 = Conv(16, 5)
+        self.maxpool2 = MaxPool(2)
+        self.conv3 = Conv(120, 5)
+        self.fc1 = FC(84)
+        self.fc2 = FC(10)
         self.layers = [
             self.conv1,
-            self.relu1,
             self.maxpool1,
             self.conv2,
-            self.relu2,
             self.maxpool2,
             self.conv3,
-            self.relu3,
             self.fc1,
-            self.relu4,
             self.fc2,
-            self.loss
         ]
+        self.crossentropy = CrossEntropy()
 
     def forward(self, x, y):
         """
         arguments:
-        x: 2DArray[float]
-           - shape: (28, 28)
+        x: 3DArray[float]
+           - shape: (28, 28, 1)
 
         returns:
         y: 2DArray[float]
            - shape: (10, 1)
         """
-        print("x:", x)
-        print("y:", y)
-        self.loss.label = y
+        #print("forward")
         for layer in self.layers:
             x = layer.forward(x)
+        #print("Lenet output:", x)
         return x
 
-    def backward(self):
-        delta = []
+    def backward(self, dLdy):
+        #print("backward")
         for layer in reversed(self.layers):
-            delta = layer.backward(delta)
+            dLdy = layer.backward(dLdy)
 
     def train(self, x_train, y_train):
-        self.forward(x_train, y_train)
-        self.backward()
-
-    def evaluate(self, x_test, y_test):
-        loss = self.forward(x_test, y_test)
-        return loss
+        y = self.forward(x_train, y_train)
+        loss = self.crossentropy.forward(y, y_train)
+        print("loss:", loss)
+        dLdy = self.crossentropy.backward(y, y_train)
+        self.backward(dLdy)
 
     def save(self, filename="model.npz"):
         np.savez(
