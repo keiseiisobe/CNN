@@ -22,3 +22,13 @@ class ReLU:
     def grad(self, x):
         x[x < 0] = 0
         return x
+
+class Identity:
+    def __init__(self):
+        pass
+
+    def fn(self, x):
+        return x
+
+    def grad(self, x):
+        return x

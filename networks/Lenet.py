@@ -94,7 +94,7 @@ class Lenet(Network):
         ]
         self.crossentropy = CrossEntropy()
 
-    def forward(self, x, y):
+    def forward(self, x):
         """
         arguments:
         x: 3DArray[float]
@@ -110,15 +110,22 @@ class Lenet(Network):
 
     def backward(self, dLdy):
         for layer in reversed(self.layers):
-            print(str(layer))
             dLdy = layer.backward(dLdy)
 
     def train(self, x_train, y_train):
-        y = self.forward(x_train, y_train)
+        y = self.forward(x_train)
         loss = self.crossentropy.forward(y, y_train)
         dLdy = self.crossentropy.backward(y, y_train)
         self.backward(dLdy)
         return loss
+
+    def softmax(self, x):
+        return np.exp(x) / np.sum(np.exp(x))
+
+    def test(self, x_train, y_train):
+        y = self.forward(x_train)
+        print("predict:", self.softmax(y))
+        print("label:", y_train)
 
     def save(self, filename="model.npz"):
         np.savez(

@@ -17,7 +17,7 @@ if __name__ == "__main__":
         one_hot_y_test[i][v] = 1
 
     # hyperparameters
-    epoch = 1000
+    epoch = 100
     batch_size = 1  # 1 (stochastic gradient decent)
 
     lenet = Lenet()
@@ -25,6 +25,7 @@ if __name__ == "__main__":
         for j in range(batch_size):
             loss = lenet.train(x_train[j].reshape(28, 28, 1), one_hot_y_train[j].reshape(-1, 1))
             print("loss:", loss)
+    lenet.test(x_train[j].reshape(28, 28, 1), one_hot_y_train[j].reshape(-1, 1))
 
 # plt.subplots()
 # plt.imshow(x_train[0].reshape(28, 28))

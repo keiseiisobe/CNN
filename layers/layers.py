@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import numpy as np
-from activations.activations import ReLU
+from activations.activations import ReLU, Identity
 
 # for debug
 import sys
@@ -43,7 +43,7 @@ class Conv(Layer):
         self.kernel_shape = kernel_shape
         self.padding = padding
         self.stride = stride
-        self.act_fn = ReLU() if activation == "ReLU" else None
+        self.act_fn = ReLU() if activation == "ReLU" else Identity()
         self.momentum = 0.99
         self.in_ch = None
         self.weights = None
@@ -187,7 +187,7 @@ class MaxPool(Layer):
 class FC(Layer):
     def __init__(self, n_out, activation="ReLU"):
         self.n_out = n_out
-        self.act_fn = ReLU() if activation == "ReLU" else None
+        self.act_fn = ReLU() if activation == "ReLU" else Identity()
         self.momentum = 0.99
         self.n_in = None
         self.weights = None
