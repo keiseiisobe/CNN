@@ -17,7 +17,10 @@ class Layer(ABC):
     @abstractmethod
     def __init__(self):
         pass
-
+    @abstractmethod
+    def __str__(self):
+        pass
+    
     @abstractmethod
     def forward(self, x):
         pass
@@ -28,18 +31,31 @@ class Layer(ABC):
 
 # normal layers
 class Conv(Layer):
-    def __init__(self, out_ch, kernel_shape: tuple, padding=0, stride=1, activation="ReLU"):
+    def __init__(
+            self,
+            out_ch,
+            kernel_shape: tuple,
+            padding=0,
+            stride=1,
+            activation="ReLU"
+    ):
         self.out_ch = out_ch
         self.kernel_shape = kernel_shape
         self.padding = padding
         self.stride = stride
         self.act_fn = ReLU() if activation == "ReLU" else None
+        self.momentum = 0.99
         self.in_ch = None
         self.weights = None
         self.bias = None
         self.x = None
+        self.dw_mem = None
+        self.db_mem = None
         self.is_initialized = False
 
+    def __str__(self):
+        return "Conv"
+        
     def _init_params(self, in_ch):
         self.in_ch = in_ch
         self.weights = rng.standard_normal(
@@ -50,9 +66,12 @@ class Conv(Layer):
                 self.out_ch
             )
         ) * np.sqrt(2.0 / (self.kernel_shape**2 * self.in_ch))
+        self.bias = np.zeros((1, 1, self.out_ch))
+        self.dw_mem = np.zeros(self.weights.shape)
+        self.db_mem = np.zeros(self.bias.shape)
         self.is_initialized = True
 
-    def _im2col(self, x, weights_shape):
+    def _im2col(self, x):
         """
         this function stretchs out input images.
        (based on https://github.com/ddbourgin/numpy-ml/blob/b0359af5285fbf9699d64fd5ec059493228af03e/numpy_ml/neural_nets/utils/utils.py#L486)
@@ -72,7 +91,6 @@ class Conv(Layer):
     def _col2im(self, x_col):
         k = self.kernel_shape
         s = self.stride
-        x_col_h, x_col_w = x_col.shape
         x_h, x_w, in_ch = self.x.shape
         w_h, w_w, in_ch, out_ch = self.weights.shape
         out_h = x_h - w_h + 1
@@ -89,20 +107,17 @@ class Conv(Layer):
         if p > 0:
             # zero padding for 0 and 1 axis (x and y), not for 2 axis (self.in_ch)
             self.x = np.pad(x, ((p, p), (p, p), (0, 0)), constant_values=0)
-        x_col, out_h, out_w = self._im2col(self.x, self.weights.shape)
+        x_col, out_h, out_w = self._im2col(self.x)
         w_raw = self.weights.reshape(self.out_ch, -1)
         return (w_raw @ x_col).reshape(out_h, out_w, self.out_ch)
         
     def forward(self, x):
-        #print("conv")
-        #print("x:", x.shape)
         # store input to obtain grad later
         self.x = x
         if not self.is_initialized:
             self._init_params(self.x.shape[2])
-        z = self._inner_forward(self.x)
+        z = self._inner_forward(self.x)# + self.bias
         a = self.act_fn.fn(z)
-        #print("y:", a.shape)
         return a
 
     def backward(self, dLdy):
@@ -110,26 +125,19 @@ class Conv(Layer):
         dL/dw = conv(x, delta)
         dL/dx = conv(delta, 180 degree rotated w)
         """
-        #print("conv")
-        #print("dLdy:", dLdy.shape)
         dLdy = dLdy.reshape((-1, self.out_ch))
         dz = self.act_fn.grad(dLdy)
-        #print("dz:", dz.shape)
-        x_col, out_h, out_w = self._im2col(self.x, self.weights.shape)
-        #print("x:", self.x.shape)
-        #print("w:", self.weights.shape)
-        #print("out_h:", out_h)
-        #print("x_col:", x_col.shape)
+        x_col, out_h, out_w = self._im2col(self.x)
         dw = (x_col @ dz).reshape(self.weights.shape)
-        self.weights -= dw * learning_rate
-        self.weights = np.rot90(self.weights, k=2)
-        #print("w:", self.weights.shape)
+        db = np.sum(dz, axis=0).reshape((self.bias.shape))
+        self.dw_mem = learning_rate * dw + self.momentum * self.dw_mem
+        self.weights -= self.dw_mem
+        self.db_mem = learning_rate * db + self.momentum * self.db_mem
+        #self.bias -= self.db_mem
+        dw = np.rot90(dw, k=2)
         dx_col = dw.reshape(-1, self.out_ch) @ dz.T
-        #print("dx_col:", dx_col.shape)
         dx = self._col2im(dx_col)
-        #print("dx:", dx.shape)
         return dx
-        
 
 
 class MaxPool(Layer):
@@ -139,9 +147,10 @@ class MaxPool(Layer):
         self.stride = stride
         self.x = None
 
+    def __str__(self):
+        return "MaxPool"
+
     def forward(self, x):
-        #print("maxpool")
-        #print("x:", x.shape)
         in_h, in_w, in_ch = x.shape
         k = self.kernel_shape
         s = self.stride
@@ -154,12 +163,9 @@ class MaxPool(Layer):
                 y[h, w, :] = np.max(x[h:h+k, w:w+k, :], (0, 1))
         # store input to obtain grad later
         self.x = x
-        #print("y:", y.shape)
         return y
 
     def backward(self, dLdy):
-        #print("maxpool")
-        #print("dLdy:", dLdy.shape)
         in_h, in_w, in_ch = self.x.shape
         k = self.kernel_shape
         s = self.stride
@@ -176,17 +182,23 @@ class MaxPool(Layer):
                     mask = np.zeros(x_patch.shape)
                     mask[x, y] = 1
                     dx[h:h*s+k, w:w*s+k, c] += dLdy[h, w, c] * mask
-        #print("dx:", dx.shape)
         return dx
 
 class FC(Layer):
     def __init__(self, n_out, activation="ReLU"):
         self.n_out = n_out
         self.act_fn = ReLU() if activation == "ReLU" else None
+        self.momentum = 0.99
         self.n_in = None
         self.weights = None
+        self.bias = None
         self.x = None
+        self.dw_mem = None
+        self.db_mem = None
         self.is_initialized = False
+
+    def __str__(self):
+        return "FC"
 
     def _init_params(self, n_in):
         self.n_in = n_in
@@ -196,29 +208,30 @@ class FC(Layer):
                 self.n_in
              )
         ) * np.sqrt(2.0 / self.n_in)
+        self.bias = np.zeros((self.n_out, 1))
+        self.dw_mem = np.zeros(self.weights.shape)
+        self.db_mem = np.zeros(self.bias.shape)
         self.is_initialized = True
 
     def forward(self, x):
-        #print("fc")
-        #print("x:", x.shape)
         # insert Flatten layer if needed
         if len(x.shape) > 1:
             x = x.flatten()
         x = np.expand_dims(x, 1)
         if not self.is_initialized:
             self._init_params(x.shape[0])
-        z = np.dot(self.weights, x)
+        z = np.dot(self.weights, x)# + self.bias
         a = self.act_fn.fn(z)
         self.x = x
-        #print("y:", a.shape)
         return a
 
     def backward(self, dLdy):
-        #print("fc")
-        #print("dLdy:", dLdy.shape)
         dz = self.act_fn.grad(dLdy)
         dw = np.dot(dz, self.x.T)
-        self.weights -= dw * learning_rate
+        db = dz
+        self.dw_mem = learning_rate * dw + self.momentum * self.dw_mem
+        self.weights -= self.dw_mem
+        self.db_mem = learning_rate * db + self.momentum * self.db_mem
+        #self.bias -= self.db_mem
         dx = np.dot(self.weights.T, dz)
-        #print("dx shape:", dx.shape)
         return dx

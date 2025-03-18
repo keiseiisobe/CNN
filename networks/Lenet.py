@@ -11,11 +11,11 @@ class Lenet(Network):
     (https://en.wikipedia.org/wiki/LeNet)
 
     architecture:
-    INPUT -> [CONV -> POOL] * 2 -> CONV -> FC -> OUTPUT
+    INPUT -> [CONV -> POOL] * 2 -> CONV -> FC -> FC -> SOFTMAX -> CROSSENTROPY
 
     details:
-    INPUT: 2DArray[float]
-       - shape: (28, 28)
+    INPUT: 3DArray[float]
+       - shape: (28, 28, 1)
 
     CONV_1:
        - kernel: (5, 5, 1)
@@ -55,7 +55,7 @@ class Lenet(Network):
 
     FC_1:
        - input: (120, 1)
-3       - weights: (84, 120)
+       - weights: (84, 120)
        - bias: 84
        - output: (84, 1)
 
@@ -104,38 +104,36 @@ class Lenet(Network):
         y: 2DArray[float]
            - shape: (10, 1)
         """
-        #print("forward")
         for layer in self.layers:
             x = layer.forward(x)
-        #print("Lenet output:", x)
         return x
 
     def backward(self, dLdy):
-        #print("backward")
         for layer in reversed(self.layers):
+            print(str(layer))
             dLdy = layer.backward(dLdy)
 
     def train(self, x_train, y_train):
         y = self.forward(x_train, y_train)
         loss = self.crossentropy.forward(y, y_train)
-        print("loss:", loss)
         dLdy = self.crossentropy.backward(y, y_train)
         self.backward(dLdy)
+        return loss
 
     def save(self, filename="model.npz"):
         np.savez(
             filename,
-            conv1=self.conv1.w,
-            conv2=self.conv2.w,
-            conv3=self.conv3.w,
-            fc1=self.fc1.w,
-            fc2=self.fc2.w
+            conv1=self.conv1.weights,
+            conv2=self.conv2.weights,
+            conv3=self.conv3.weights,
+            fc1=self.fc1.weights,
+            fc2=self.fc2.weights
         )
 
     def load(self, filename="model.npz"):
         model = np.load(filename)
-        self.conv1.w = model["conv1"]
-        self.conv2.w = model["conv2"]
-        self.conv3.w = model["conv3"]
-        self.fc1.w = model["fc1"]
-        self.fc2.w = model["fc2"]
+        self.conv1.weights = model["conv1"]
+        self.conv2.weights = model["conv2"]
+        self.conv3.weights = model["conv3"]
+        self.fc1.weights = model["fc1"]
+        self.fc2.weights = model["fc2"]
